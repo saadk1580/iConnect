@@ -9,18 +9,21 @@ import Filter from "bad-words";
 import PhotoIcon from "@mui/icons-material/Photo";
 import ClearIcon from "@mui/icons-material/Clear";
 import InputEmoji from "react-input-emoji";
+import { v4 as uuid } from "uuid";
 
 firebase.initializeApp({
   apiKey: process.env.REACT_APP_API_KEY,
-  authDomain: "gold-contact-287818.firebaseapp.com",
-  projectId: "gold-contact-287818",
-  storageBucket: "gold-contact-287818.appspot.com",
-  messagingSenderId: "96933600845",
-  appId: "1:96933600845:web:8107227cb4c86ed9088604",
-  measurementId: "G-7V7HL8PHE8",
+  authDomain: process.env.REACT_APP_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_AUTH_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_APP_APP_ID,
+  measurementId: process.env.REACT_APP_MEASUREMENT_ID,
 });
 
-const db = firebase.firestore();
+/////
+
+export const db = firebase.firestore();
 const auth = firebase.auth();
 var storage = firebase.app().storage().ref();
 
@@ -33,6 +36,10 @@ export default function Chat() {
   const [fileUrl, setFileUrl] = useState(null);
   const [name, setName] = useState(null);
   const [profilePic, setProfilePic] = useState(null);
+  const [chats, setChat] = useState([]);
+  const [email, setEmail] = useState(null);
+  const [uid, setUid] = useState("");
+  const [users, setUsers] = useState([]);
 
   const signInWithToken = () => {
     var credential = firebase.auth.GoogleAuthProvider.credential(
@@ -45,13 +52,13 @@ export default function Chat() {
         var user = result.user;
         setName(user.displayName);
         setProfilePic(user.photoURL);
+        setEmail(user.email);
+        setUid(user.uid);
       })
       .catch((error) => {
         console.log(error);
       });
   };
-
-  // console.log(localStorage.getItem("token"));
 
   useEffect(() => {
     localStorage.getItem("token") && signInWithToken();
@@ -66,7 +73,23 @@ export default function Chat() {
           })
         );
       });
-  }, []);
+
+    db.collection("users").onSnapshot((snapshot) => {
+      setUsers(
+        snapshot.docs
+          .filter((doc) => doc.data().uid !== uid)
+          .map((i) => i.data().name)
+      );
+    });
+  }, [chatId]);
+
+  useEffect(() => {
+    uid &&
+      db
+        .collection("users")
+        .doc(uid)
+        .onSnapshot((snapshot) => setChat(snapshot.data().connections));
+  }, [uid]);
 
   const badWordCheck = (text) => {
     const badWords = new Filter();
@@ -83,24 +106,6 @@ export default function Chat() {
       name: name,
       picUrl: profilePic,
       imageUrl: fileUrl,
-      //   reactions: {
-      //     surprise: {
-      //       count: 0,
-      //       users: [],
-      //     },
-      //     angry: {
-      //       count: 0,
-      //       users: [],
-      //     },
-      //     sad: {
-      //       count: 0,
-      //       users: [],
-      //     },
-      //     love: {
-      //       count: 0,
-      //       users: [],
-      //     },
-      //   },
     });
     setMsg("");
     setFileUrl(null);
@@ -163,38 +168,17 @@ export default function Chat() {
         <h1 className="groups-title">
           <ExpandMoreIcon /> CHATS
         </h1>
-        {/* {userGroups.map((ev, idx) => (
-          <div key={idx}>
-            <p
-              className="group-name"
-              onClick={() => {
-                setChatId(ev.id);
-                setEvent(ev);
-                setEventName(ev.event.name);
-              }}
-            >
-              {ev.event.name.toUpperCase()}
-            </p>
-          </div>
-        ))} */}
+
+        <ul>
+          {Object.keys(chats).map((i) => (
+            <li onClick={() => setChatId(chats[i].chatId)}>{i}</li>
+          ))}
+        </ul>
       </div>
       <div>
         <div className="group-members-container">
           {/* <p style={{ marginLeft: "10px" }}>{eventName.toUpperCase()}</p> */}
-          <div className="group-members">
-            {/* {event &&
-              event.users.map((user) => (
-                <img
-                  style={{
-                    width: "35px",
-                    height: "35px",
-                    borderRadius: "10px",
-                    margin: "5px",
-                  }}
-                  src={user.imageUrl}
-                />
-              ))} */}
-          </div>
+          <div className="group-members"></div>
         </div>
         <div className="chat-container">
           {messages &&
@@ -270,40 +254,6 @@ export default function Chat() {
                           maxWidth: "30vw",
                         }}
                       >
-                        {/* <ul>
-                          <li
-                            onClick={() =>
-                              updateMessage(
-                                "surprise",
-                                message.id,
-                                message.name
-                              )
-                            }
-                          >
-                            &#128558;
-                          </li>
-                          <li
-                            onClick={() =>
-                              updateMessage("&#128545;", message.id)
-                            }
-                          >
-                            &#128545;
-                          </li>
-                          <li
-                            onClick={() =>
-                              updateMessage("&#128532;", message.id)
-                            }
-                          >
-                            &#128532;
-                          </li>
-                          <li
-                            onClick={() =>
-                              updateMessage("&#128525;", message.id)
-                            }
-                          >
-                            &#128525;
-                          </li>
-                        </ul> */}
                         <p>{message.text}</p>
                         {message.imageUrl !== null ? (
                           <a href={message.imageUrl} target="_blank">
@@ -382,8 +332,33 @@ export default function Chat() {
                 setFileUrl(await fileRef.getDownloadURL());
               }}
             />
+          </div>
+        </div>
+      </div>
+      <div>
+        <h1>Add Users</h1>
+        <ul>
+          {users.map((user) => (
+            <li
+              onClick={() => {
+                let obj = {};
+                obj[user] = { name: user, chatId: uuid() };
+                db.collection("users")
+                  .doc(uid)
+                  .set({ connections: obj }, { merge: true });
+              }}
+            >
+              {user}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
 
-            {/* <a
+{
+  /* <a
               disabled={msg.length === 0 ? true : false}
               onClick={() => {
                 msg.length !== 0 ? badWordCheck(msg) : "";
@@ -391,10 +366,93 @@ export default function Chat() {
               className="send-btn"
             >
               {<SendIcon style={{ height: "25px", width: "25px" }} />}
-            </a> */}
+            </a> */
+}
+
+{
+  /* <ul>
+                          <li
+                            onClick={() =>
+                              updateMessage(
+                                "surprise",
+                                message.id,
+                                message.name
+                              )
+                            }
+                          >
+                            &#128558;
+                          </li>
+                          <li
+                            onClick={() =>
+                              updateMessage("&#128545;", message.id)
+                            }
+                          >
+                            &#128545;
+                          </li>
+                          <li
+                            onClick={() =>
+                              updateMessage("&#128532;", message.id)
+                            }
+                          >
+                            &#128532;
+                          </li>
+                          <li
+                            onClick={() =>
+                              updateMessage("&#128525;", message.id)
+                            }
+                          >
+                            &#128525;
+                          </li>
+                        </ul> */
+}
+
+{
+  /* {event &&
+              event.users.map((user) => (
+                <img
+                  style={{
+                    width: "35px",
+                    height: "35px",
+                    borderRadius: "10px",
+                    margin: "5px",
+                  }}
+                  src={user.imageUrl}
+                />
+              ))} */
+}
+
+//   reactions: {
+//     surprise: {
+//       count: 0,
+//       users: [],
+//     },
+//     angry: {
+//       count: 0,
+//       users: [],
+//     },
+//     sad: {
+//       count: 0,
+//       users: [],
+//     },
+//     love: {
+//       count: 0,
+//       users: [],
+//     },
+//   },
+
+{
+  /* {userGroups.map((ev, idx) => (
+          <div key={idx}>
+            <p
+              className="group-name"
+              onClick={() => {
+                setChatId(ev.id);
+                setEvent(ev);
+                setEventName(ev.event.name);
+              }}
+            >
+              {ev.event.name.toUpperCase()}
+            </p>
           </div>
-        </div>
-      </div>
-    </div>
-  );
+        ))} */
 }

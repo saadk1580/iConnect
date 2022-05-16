@@ -13,13 +13,13 @@
     "bad-words": "^3.0.4",
     "dotenv": "^16.0.1",
     "firebase": "^8.10.1",
-    "fs": "0.0.1-security",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-input-emoji": "^4.1.0",
     "react-router": "^6.3.0",
     "react-router-dom": "^6.3.0",
     "react-scripts": "5.0.1",
+    "uuidv4": "^6.2.13",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
